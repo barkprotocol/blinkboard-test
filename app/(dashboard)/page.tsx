@@ -3,6 +3,8 @@ import { File, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProductsTable } from './products-table';
 import { getProducts } from '@/lib/db';
+import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 
 export default async function ProductsPage({
   searchParams
@@ -22,7 +24,7 @@ export default async function ProductsPage({
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="draft">Draft</TabsTrigger>
+          <TabsTrigger value="draft">Blink</TabsTrigger>
           <TabsTrigger value="archived" className="hidden sm:flex">
             Archived
           </TabsTrigger>

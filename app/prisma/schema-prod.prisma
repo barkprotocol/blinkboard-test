@@ -1,0 +1,569 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource supabase_db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Host {
+  id         Int        @id @default(autoincrement())
+  email      String     @unique
+  username   String     @unique
+  publicKey  String     @unique
+  isPaid     Boolean    @default(false)
+  freeTrials Int        @default(5)
+  apiKey     String?    @unique
+  bounties   Bounties[]
+  @@unique([publicKey, email])
+  @@index([email, username])
+}
+
+model User {
+  id                String         @id @default(cuid())
+  name              String?
+  email             String         @unique
+  emailVerified     DateTime?
+  image             String?
+  account           Account?
+  role              UserRole       @default(USER)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  lastLogin         DateTime?
+  twoFactorEnabled  Boolean        @default(false)
+  twoFactorSecret   String?
+  passwordHash      String
+  blinks            Blink[]
+  nfts              NFT[]
+  sentTxs           Transaction[]  @relation("SenderTransactions")
+  receivedTxs       Transaction[]  @relation("ReceiverTransactions")
+  collections       Collection[]
+  marketplaceListings MarketplaceListing[]
+  orders            Order[]
+  reviews           Review[]
+  notifications     Notification[]
+  followers         Follow[]       @relation("Following")
+  following         Follow[]       @relation("Followers")
+  createdCrowdfundings Crowdfunding[] @relation("CreatedCrowdfundings")
+  contributedCrowdfundings Crowdfunding[] @relation("ContributedCrowdfundings")
+  sentGifts         Gift[]         @relation("SentGifts")
+  receivedGifts     Gift[]         @relation("ReceivedGifts")
+  memos             Memo[]
+  posts             Post[]
+  subscriptions     Subscription[]
+  profile           Profile?
+  bids              Bid[]
+  liquidityProvided LiquidityProvider[]
+  swaps             SwapTransaction[]
+
+  @@index([email])
+}
+
+model Account {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  avatar    String   @unique
+  walletAddress    String   @unique
+  balance   Float
+  currency  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([walletAddress])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  title     String   @db.VarChar(255)
+  content   String?
+  published Boolean  @default(false)
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+
+  @@index([authorId])
+}
+
+model Profile {
+  id     String  @id @default(cuid())
+  bio    String?
+  user   User    @relation(fields: [userId], references: [id])
+  userId String  @unique
+}
+
+enum UserRole {
+  USER
+  CREATOR
+  ADMIN
+  MODERATOR
+  VERIFIED
+}
+
+model Blink {
+  id            String     @id @default(cuid())
+  name          String
+  description   String
+  owner         User       @relation(fields: [ownerId], references: [id])
+  ownerId       String
+  mintAddress   String     @unique
+  metadata      Json
+  rarity        BlinkRarity
+  collection    Collection? @relation(fields: [collectionId], references: [id])
+  collectionId  String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  transactions  Transaction[]
+  listings      MarketplaceListing[]
+  attributes    BlinkAttribute[]
+  royaltyPercentage Float  @default(0)
+  isLocked      Boolean    @default(false)
+  unlockDate    DateTime?
+  edition       Int?
+  maxEdition    Int?
+  gifts         Gift[]
+  memos         Memo[]
+  reviews       Review[]
+
+  @@index([ownerId, mintAddress])
+}
+
+enum BlinkRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+  MYTHIC
+  UNIQUE
+}
+
+model BlinkAttribute {
+  id        String   @id @default(cuid())
+  blink     Blink    @relation(fields: [blinkId], references: [id])
+  blinkId   String
+  traitType String
+  value     String
+  rarity    Float?
+
+  @@index([blinkId])
+}
+
+model NFT {
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  image         String
+  owner         User     @relation(fields: [ownerId], references: [id])
+  ownerId       String
+  mintAddress   String   @unique
+  metadata      Json
+  collection    Collection? @relation(fields: [collectionId], references: [id])
+  collectionId  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  transactions  Transaction[]
+  listings      MarketplaceListing[]
+  royaltyPercentage Float  @default(0)
+  isLocked      Boolean    @default(false)
+  unlockDate    DateTime?
+  reviews       Review[]
+
+  @@index([ownerId, mintAddress])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  type      TransactionType
+  from      User     @relation("SenderTransactions", fields: [fromId], references: [id])
+  fromId    String
+  to        User     @relation("ReceiverTransactions", fields: [toId], references: [id])
+  toId      String
+  amount    Float
+  currency  String
+  status    TransactionStatus
+  txHash    String   @unique
+  blink     Blink?   @relation(fields: [blinkId], references: [id])
+  blinkId   String?
+  nft       NFT?     @relation(fields: [nftId], references: [id])
+  nftId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  fee       Float?
+  gasUsed   Float?
+  blockNumber Int?
+  confirmations Int   @default(0)
+  metadata  Json?
+
+  @@index([fromId, toId, status])
+  @@index([txHash])
+}
+
+enum TransactionType {
+  MINT
+  TRANSFER
+  BURN
+  MARKETPLACE_SALE
+  AUCTION_SALE
+  ROYALTY_PAYMENT
+  CROWDFUNDING_CONTRIBUTION
+  GIFT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PROCESSING
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  creator     User     @relation(fields: [creatorId], references: [id])
+  creatorId   String
+  blinks      Blink[]
+  nfts        NFT[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  coverImage  String?
+  isVerified  Boolean  @default(false)
+
+  @@index([creatorId])
+}
+
+model MarketplaceListing {
+  id        String   @id @default(cuid())
+  seller    User     @relation(fields: [sellerId], references: [id])
+  sellerId  String
+  blink     Blink?   @relation(fields: [blinkId], references: [id])
+  blinkId   String?
+  nft       NFT?     @relation(fields: [nftId], references: [id])
+  nftId     String?
+  price     Float
+  currency  String
+  status    ListingStatus
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime?
+  isAuction Boolean  @default(false)
+  startingPrice Float?
+  reservePrice Float?
+  bids      Bid[]
+
+  @@index([sellerId, status])
+  @@index([blinkId, nftId])
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+  EXPIRED
+}
+
+model Bid {
+  id        String   @id @default(cuid())
+  bidder    User     @relation(fields: [bidderId], references: [id])
+  bidderId  String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id])
+  listingId String
+  amount    Float
+  createdAt DateTime @default(now())
+  status    BidStatus
+
+  @@index([bidderId, listingId])
+}
+
+enum BidStatus {
+  ACTIVE
+  ACCEPTED
+  OUTBID
+  CANCELLED
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  status        OrderStatus
+  total         Float
+  currency      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  items         OrderItem[]
+  shippingAddress String?
+  trackingNumber String?
+
+  @@index([userId, status])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id])
+  orderId   String
+  blinkId   String?
+  nftId     String?
+  quantity  Int
+  price     Float
+  currency  String
+
+  @@index([orderId])
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  SHIPPED
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  blink     Blink?   @relation(fields: [blinkId], references: [id])
+  blinkId   String?
+  nft       NFT?     @relation(fields: [nftId], references: [id])
+  nftId     String?
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isVerified Boolean @default(false)
+
+  @@index([userId, blinkId, nftId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      NotificationType
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  metadata  Json?
+
+  @@index([userId, read])
+}
+
+enum NotificationType {
+  TRANSACTION
+  LISTING
+  ORDER
+  SYSTEM
+  BID
+  AUCTION_END
+  GIFT
+  FOLLOW
+  MENTION
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  follower    User     @relation("Following", fields: [followerId], references: [id])
+  followerId  String
+  following   User     @relation("Followers", fields: [followingId], references: [id])
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followerId, followingId])
+}
+
+model Crowdfunding {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  creator     User     @relation("CreatedCrowdfundings", fields: [creatorId], references: [id])
+  creatorId   String
+  goal        Float
+  currentAmount Float  @default(0)
+  currency    String
+  startDate   DateTime
+  endDate     DateTime
+  status      CrowdfundingStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  contributors User[]  @relation("ContributedCrowdfundings")
+
+  @@index([creatorId, status])
+}
+
+enum CrowdfundingStatus {
+  ACTIVE
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+}
+
+model Gift {
+  id        String   @id @default(cuid())
+  sender    User     @relation("SentGifts", fields: [senderId], references: [id])
+  senderId  String
+  receiver  User     @relation("ReceivedGifts", fields: [receiverId], references: [id])
+  receiverId String
+  blink     Blink    @relation(fields: [blinkId], references: [id])
+  blinkId   String
+  message   String?
+  createdAt DateTime @default(now())
+  claimedAt DateTime?
+  status    GiftStatus
+
+  @@index([senderId, receiverId])
+}
+
+enum GiftStatus {
+  PENDING
+  CLAIMED
+  EXPIRED
+}
+
+model Bounties {
+  id          String              @id @default(uuid())
+  name        String              @unique
+  amount      Int
+  imageUrl    String
+  isVerified  Boolean             @default(false)
+  type        String
+  submissions BountySubmissions[]
+  description String
+  createdAt   DateTime            @default(now())
+  isActive    Boolean             @default(false)
+  interval    DateTime
+  hostId      Int
+  hostRel     Host                @relation(fields: [hostId], references: [id])
+  questions   String[]
+  types       String[]
+  winners     String[]            @default([])
+  prizes      Float[]             @default([])
+  escrow_id   Int?
+
+  @@index([hostId, isActive])
+}
+
+model BountySubmissions {
+  id           Int      @id @default(autoincrement())
+  bountyId     String
+  candidPubKey String
+  question     String[]
+  answers      String[]
+  bountyRel    Bounties @relation(fields: [bountyId], references: [id])
+
+  @@unique([bountyId, candidPubKey])
+  @@index([bountyId])
+}
+
+model Memo {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  blink     Blink    @relation(fields: [blinkId], references: [id])
+  blinkId   String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, blinkId])
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  plan      SubscriptionPlan
+  startDate DateTime
+  endDate   DateTime?
+  status    SubscriptionStatus
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PENDING
+}
+
+model LiquidityPool {
+  id            String      @id @default(cuid())
+  address       String      @unique
+  name          String
+  description   String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  tokens        PoolToken[]
+  providers     LiquidityProvider[]
+  swaps         SwapTransaction[]
+  status        LiquidityPoolStatus @default(ACTIVE)
+
+  @@index([status])
+}
+
+enum LiquidityPoolStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+model PoolToken {
+  id            String   @id @default(cuid())
+  poolId        String
+  pool          LiquidityPool @relation(fields: [poolId], references: [id])
+  tokenAddress  String
+  balance       Float
+  weight        Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([poolId, tokenAddress])
+  @@index([poolId])
+}
+
+model LiquidityProvider {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  poolId        String
+  pool          LiquidityPool @relation(fields: [poolId], references: [id])
+  amount        Float
+  sharePercentage Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, poolId])
+  @@index([userId, poolId])
+}
+
+model SwapTransaction {
+  id            String   @id @default(cuid())
+  poolId        String
+  pool          LiquidityPool @relation(fields: [poolId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  tokenInAddress String
+  tokenOutAddress String
+  amountIn      Float
+  amountOut     Float
+  fee           Float
+  createdAt     DateTime @default(now())
+
+  @@index([poolId, userId])
+}
