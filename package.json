@@ -1,4 +1,6 @@
 {
+  "name": "blinkboard",
+  "description": "",
   "private": true,
   "scripts": {
     "dev": "next dev",
